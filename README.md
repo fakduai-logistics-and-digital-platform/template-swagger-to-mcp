@@ -43,7 +43,7 @@ if [ -d template-swagger-to-mcp ]; then
   cd template-swagger-to-mcp
   git pull
 else
-  git clone https://github.com/<owner>/<repo>.git template-swagger-to-mcp
+  git clone https://github.com/watchakorn-18k/template-swagger-to-mcp
   cd template-swagger-to-mcp
 fi
 uv sync
