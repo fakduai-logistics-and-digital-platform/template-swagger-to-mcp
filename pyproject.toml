@@ -1,0 +1,12 @@
+[project]
+name = "template-swagger-to-mcp"
+version = "0.1.0"
+description = "tempate swagger to mcp"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "PyYAML>=6.0",
+    "fastmcp>=2.12.3",
+    "mcp[cli]>=1.14.1",
+]
