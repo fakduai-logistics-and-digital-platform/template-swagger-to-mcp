@@ -28,7 +28,7 @@ openapi_spec = load_openapi_spec(SPEC_PATH)
 mcp = FastMCP.from_openapi(
     openapi_spec=openapi_spec,
     client=client,
-    name="Pinto API MCP",
+    name="Template API MCP",
 )
 
 
