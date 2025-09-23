@@ -79,6 +79,11 @@ Claude Code reads MCP definitions from a JSON config file. After you have the pr
    ```
    - Swap in the real absolute path you cloned to. If you prefer to activate a virtual environment before running, point the command to a wrapper script that does so.
 3. Restart Claude Code. The new MCP server appears in the tools list; enable it and start issuing API calls from chats or the command palette.
+  
+Claude MCP CLI:
+```bash
+claude mcp add pinto-api-mcp -- uv --directory /Users/<ชื่อผู้ใช้>/pinto-api-mcp run main.py
+```
 
 > Tip: For authenticated APIs, add secrets via Claude Code's UI (Settings → Tools) or inject environment variables in the `env` block.
 
