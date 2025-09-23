@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/watchakorn-18k-template-swagger-to-mcp-badge.png)](https://mseep.ai/app/watchakorn-18k-template-swagger-to-mcp)
+
 # Swagger-to-MCP Template
 
 Turn any existing OpenAPI/Swagger specification into a Model Context Protocol (MCP) server powered by [FastMCP](https://github.com/modelcontextprotocol/fastmcp). This repository is a minimal starting point for exposing an HTTP API to MCP-compatible clients such as Claude Code and Codex.
