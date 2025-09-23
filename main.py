@@ -14,23 +14,65 @@ def load_openapi_spec(spec_path: Path) -> dict:
         return yaml.safe_load(f)
 
 
+async def load_openapi_spec_from_url(url: str) -> dict:
+    """Load and parse the OpenAPI spec from a URL."""
+    async with httpx.AsyncClient() as temp_client:
+        response = await temp_client.get(url)
+        response.raise_for_status()
+        return yaml.safe_load(response.text)
+
+
 SPEC_PATH = Path(__file__).parent / "swagger.yaml"
 
-
-# Base URL configuration
+# Configuration - set SWAGGER_URL to empty string to use local file
+SWAGGER_URL = "http://localhost:1323/swagger.yaml"  # Set to "" to use local file
 BASE_URL = "http://localhost:1323"
+
+# JWT Token storage
+JWT_TOKEN = ""
 
 # Create an HTTP client for your API (the MCP server will reuse this instance)
 client = httpx.AsyncClient(base_url=BASE_URL)
 
-# Load your OpenAPI spec from swagger.yaml
-openapi_spec = load_openapi_spec(SPEC_PATH)
+# Load OpenAPI spec based on configuration
+if SWAGGER_URL == "":
+    # Use local file
+    try:
+        openapi_spec = load_openapi_spec(SPEC_PATH)
+        print(f"✅ Loaded OpenAPI spec from local file: {SPEC_PATH}")
+    except Exception as e:
+        print(f"❌ Failed to load local file: {e}")
+        # Create minimal spec as fallback
+        openapi_spec = {
+            "openapi": "3.1.0",
+            "info": {"title": "Pinto API", "version": "1.0"},
+            "paths": {}
+        }
+else:
+    # Try to load from URL first, fallback to local file
+    try:
+        import asyncio
+        openapi_spec = asyncio.run(load_openapi_spec_from_url(SWAGGER_URL))
+        print(f"✅ Loaded OpenAPI spec from URL: {SWAGGER_URL}")
+    except Exception as e:
+        print(f"⚠️  Failed to load from URL ({e}), falling back to local file")
+        try:
+            openapi_spec = load_openapi_spec(SPEC_PATH)
+            print(f"✅ Loaded OpenAPI spec from local file: {SPEC_PATH}")
+        except Exception as local_error:
+            print(f"❌ Failed to load local file: {local_error}")
+            # Create minimal spec as fallback
+            openapi_spec = {
+                "openapi": "3.1.0",
+                "info": {"title": "Pinto API", "version": "1.0"},
+                "paths": {}
+            }
 
 # Create the MCP server
 mcp = FastMCP.from_openapi(
     openapi_spec=openapi_spec,
     client=client,
-    name="Template API MCP",
+    name="Pinto API MCP",
 )
 
 
@@ -138,8 +180,68 @@ def set_base_url(base_url: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-async def reload_openapi_spec(spec_source: str) -> Dict[str, Any]:
-    """Reload OpenAPI spec from a local file path or URL."""
+def set_jwt_token(token: str) -> Dict[str, Any]:
+    """Set JWT token for authenticated API calls.
+    
+    Examples:
+    - set_jwt_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
+    - set_jwt_token("") - clear token
+    """
+    global JWT_TOKEN
+    
+    JWT_TOKEN = token.strip()
+    
+    if JWT_TOKEN == "":
+        return {
+            "success": True,
+            "message": "JWT token cleared",
+            "has_token": False
+        }
+    else:
+        # Basic validation - check if it looks like a JWT
+        parts = JWT_TOKEN.split('.')
+        if len(parts) != 3:
+            return {"error": "Invalid JWT format. JWT should have 3 parts separated by dots."}
+        
+        return {
+            "success": True,
+            "message": "JWT token set successfully",
+            "has_token": True,
+            "token_preview": f"{JWT_TOKEN[:20]}..." if len(JWT_TOKEN) > 20 else JWT_TOKEN
+        }
+
+
+@mcp.tool()
+def get_jwt_status() -> Dict[str, Any]:
+    """Check current JWT token status."""
+    if JWT_TOKEN == "":
+        return {
+            "has_token": False,
+            "message": "No JWT token set"
+        }
+    else:
+        return {
+            "has_token": True,
+            "message": "JWT token is set",
+            "token_preview": f"{JWT_TOKEN[:20]}..." if len(JWT_TOKEN) > 20 else JWT_TOKEN
+        }
+
+
+
+@mcp.tool()
+async def reload_openapi_spec(spec_source: str = "") -> Dict[str, Any]:
+    """Reload OpenAPI spec from a URL or local file path.
+    
+    Examples:
+    - reload_openapi_spec() - reload using current configuration (URL or local file)
+    - reload_openapi_spec("https://api.pinto-app.com/swagger.yaml") - load from URL
+    - reload_openapi_spec("swagger.yaml") - load from local file
+    """
+    global openapi_spec
+    
+    # If no spec_source provided, use current configuration
+    if spec_source == "":
+        spec_source = SWAGGER_URL if SWAGGER_URL != "" else "swagger.yaml"
     global openapi_spec
     
     try:
@@ -221,12 +323,26 @@ async def call_api_endpoint(
     method: str = "GET", 
     headers: Dict[str, str] = None, 
     query_params: Dict[str, Any] = None,
-    json_body: Dict[str, Any] = None
+    json_body: Dict[str, Any] = None,
+    use_jwt: bool = True
 ) -> Dict[str, Any]:
-    """Call an API endpoint and return the actual response."""
+    """Call an API endpoint and return the actual response.
+    
+    Parameters:
+    - path: API endpoint path
+    - method: HTTP method (GET, POST, PUT, DELETE, PATCH)
+    - headers: Additional headers
+    - query_params: Query parameters
+    - json_body: JSON request body
+    - use_jwt: Whether to include JWT token in Authorization header (default: True)
+    """
     try:
         # Prepare headers
         request_headers = headers or {}
+        
+        # Add JWT token if available and requested
+        if use_jwt and JWT_TOKEN:
+            request_headers["Authorization"] = f"Bearer {JWT_TOKEN}"
         
         # Prepare the request
         request_kwargs = {
@@ -258,7 +374,8 @@ async def call_api_endpoint(
             "data": response_data,
             "url": str(response.url),
             "method": method.upper(),
-            "success": response.is_success
+            "success": response.is_success,
+            "used_jwt": use_jwt and bool(JWT_TOKEN)
         }
         
     except Exception as e:
@@ -266,7 +383,57 @@ async def call_api_endpoint(
             "error": str(e),
             "path": path,
             "method": method.upper(),
-            "success": False
+            "success": False,
+            "used_jwt": use_jwt and bool(JWT_TOKEN)
+        }
+
+
+@mcp.tool()
+async def login_and_get_token(email: str, password: str) -> Dict[str, Any]:
+    """Login with email/password and automatically set JWT token.
+    
+    This is a convenience function that calls the login API and stores the token.
+    """
+    try:
+        # Call login endpoint
+        login_response = await call_api_endpoint(
+            path="/api/auth/login",
+            method="POST",
+            json_body={"email": email, "password": password},
+            use_jwt=False  # Don't use JWT for login
+        )
+        
+        if not login_response.get("success"):
+            return {
+                "success": False,
+                "error": "Login failed",
+                "login_response": login_response
+            }
+        
+        # Extract token from response
+        response_data = login_response.get("data", {})
+        if isinstance(response_data, dict) and "data" in response_data:
+            token = response_data["data"].get("token")
+            if token:
+                # Set the token
+                token_result = set_jwt_token(token)
+                return {
+                    "success": True,
+                    "message": "Login successful and token set",
+                    "token_info": token_result,
+                    "user_info": response_data["data"].get("user", {})
+                }
+        
+        return {
+            "success": False,
+            "error": "Token not found in login response",
+            "login_response": login_response
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Login error: {str(e)}"
         }
 
 
