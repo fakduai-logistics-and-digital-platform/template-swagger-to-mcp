@@ -1,4 +1,13 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/watchakorn-18k-template-swagger-to-mcp-badge.png)](https://mseep.ai/app/watchakorn-18k-template-swagger-to-mcp)
+
+
+
+<div align="center">
+
+<img width="300" alt="image" src="https://github.com/user-attachments/assets/f05079c2-5ae5-4d5a-acac-678985687583" />
+
+[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/8cf8738d-fbba-47e6-8aba-7a638441b500)
+
+</div>
 
 # Swagger-to-MCP Template
 
@@ -125,3 +134,5 @@ Codex spawns the MCP server using the configured command and exposes each OpenAP
 - **MCP client cannot find the server**: double-check config file paths, `cwd` values, and restart the client after edits.
 
 Happy building!
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/watchakorn-18k-template-swagger-to-mcp-badge.png)](https://mseep.ai/app/watchakorn-18k-template-swagger-to-mcp)
