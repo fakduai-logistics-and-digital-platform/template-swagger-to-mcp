@@ -16,8 +16,12 @@ def load_openapi_spec(spec_path: Path) -> dict:
 
 SPEC_PATH = Path(__file__).parent / "swagger.yaml"
 
+
+# Base URL configuration
+BASE_URL = "http://localhost:1323"
+
 # Create an HTTP client for your API (the MCP server will reuse this instance)
-client = httpx.AsyncClient(base_url="http://localhost:1323")
+client = httpx.AsyncClient(base_url=BASE_URL)
 
 # Load your OpenAPI spec from swagger.yaml
 openapi_spec = load_openapi_spec(SPEC_PATH)
@@ -44,7 +48,7 @@ def list_api_paths() -> List[Dict[str, Any]]:
                     "summary": details.get("summary", ""),
                     "description": details.get("description", ""),
                     "tags": details.get("tags", []),
-                    "full_url": f"http://localhost:1323{path}"
+                    "full_url": f"{BASE_URL}{path}"
                 }
                 paths_info.append(path_info)
     
@@ -60,7 +64,7 @@ def get_api_path_details(path: str) -> Dict[str, Any]:
     path_details = openapi_spec["paths"][path]
     result = {
         "path": path,
-        "full_url": f"http://localhost:1323{path}",
+        "full_url": f"{BASE_URL}{path}",
         "methods": {}
     }
     
@@ -101,11 +105,90 @@ def search_api_paths(query: str) -> List[Dict[str, Any]]:
                         "method": method.upper(),
                         "summary": details.get("summary", ""),
                         "tags": details.get("tags", []),
-                        "full_url": f"http://localhost:1323{path}"
+                        "full_url": f"{BASE_URL}{path}"
                     }
                     matching_paths.append(path_info)
     
     return matching_paths
+
+
+@mcp.tool()
+def set_base_url(base_url: str) -> Dict[str, Any]:
+    """Set a new base URL for API calls."""
+    global BASE_URL, client
+    
+    # Validate URL format
+    if not base_url.startswith(('http://', 'https://')):
+        return {"error": "Base URL must start with http:// or https://"}
+    
+    # Remove trailing slash if present
+    base_url = base_url.rstrip('/')
+    
+    # Update global BASE_URL
+    BASE_URL = base_url
+    
+    # Create new client with updated base URL
+    client = httpx.AsyncClient(base_url=BASE_URL)
+    
+    return {
+        "success": True,
+        "message": f"Base URL updated to: {BASE_URL}",
+        "base_url": BASE_URL
+    }
+
+
+@mcp.tool()
+async def reload_openapi_spec(spec_source: str) -> Dict[str, Any]:
+    """Reload OpenAPI spec from a local file path or URL."""
+    global openapi_spec
+    
+    try:
+        if spec_source.startswith(('http://', 'https://')):
+            # Load from URL
+            async with httpx.AsyncClient() as temp_client:
+                response = await temp_client.get(spec_source)
+                response.raise_for_status()
+                openapi_spec = yaml.safe_load(response.text)
+        else:
+            # Load from local file
+            spec_path = Path(spec_source)
+            if not spec_path.is_absolute():
+                spec_path = Path(__file__).parent / spec_path
+            
+            if not spec_path.exists():
+                return {"error": f"File not found: {spec_path}"}
+            
+            openapi_spec = load_openapi_spec(spec_path)
+        
+        return {
+            "success": True,
+            "message": f"OpenAPI spec loaded from: {spec_source}",
+            "spec_info": {
+                "title": openapi_spec.get("info", {}).get("title", ""),
+                "version": openapi_spec.get("info", {}).get("version", ""),
+                "total_paths": len(openapi_spec.get("paths", {}))
+            }
+        }
+        
+    except Exception as e:
+        return {"error": f"Failed to load spec: {str(e)}"}
+
+
+@mcp.tool()
+def get_current_spec_info() -> Dict[str, Any]:
+    """Get information about current OpenAPI spec and configuration."""
+    info = openapi_spec.get("info", {})
+    
+    return {
+        "current_base_url": BASE_URL,
+        "spec_info": {
+            "title": info.get("title", ""),
+            "version": info.get("version", ""),
+            "description": info.get("description", ""),
+            "total_paths": len(openapi_spec.get("paths", {}))
+        },
+        "servers": openapi_spec.get("servers", [])
+    }
 
 
 @mcp.tool()
@@ -125,7 +208,7 @@ def get_api_base_info() -> Dict[str, Any]:
         "title": info.get("title", ""),
         "version": info.get("version", ""),
         "description": info.get("description", ""),
-        "base_url": "http://localhost:1323",
+        "base_url": BASE_URL,
         "servers": servers,
         "available_tags": sorted(list(all_tags)),
         "total_paths": len(openapi_spec.get("paths", {}))
